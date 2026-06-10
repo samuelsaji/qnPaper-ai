@@ -136,7 +136,6 @@ export default function PaperPreviewPage() {
     return <div style={{ padding: 40, textAlign: "center", color: "#6B7280" }}>Loading paper...</div>;
   }
 
-  // Detect format
   const isAI = paper.source === "ai" || (paper.questions && Array.isArray(paper.questions));
   const totalMarks = paper.total_marks || paper.totalMarks || "—";
   const duration = paper.duration || "—";
@@ -144,6 +143,81 @@ export default function PaperPreviewPage() {
   const grade = paper.grade || "—";
   const examName = paper.examName || paper.title || "Question Paper";
   const questionCount = paper.question_count || (isAI ? (paper.questions || []).length : null);
+
+  const handlePrint = () => {
+    const questions = paper.questions || [];
+    const typeOrder = [];
+    const byType = {};
+    if (isAI) {
+      questions.forEach((q) => {
+        const raw = q.type || q.question_type || "general";
+        const type = raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        if (!byType[type]) { byType[type] = []; typeOrder.push(type); }
+        byType[type].push(q);
+      });
+    }
+
+    let questionsHtml = "";
+    if (isAI && typeOrder.length > 0) {
+      typeOrder.forEach((type, si) => {
+        const qs = byType[type];
+        const sectionMarks = qs.reduce((s, q) => s + (Number(q.marks) || 0), 0);
+        questionsHtml += `
+          <div style="margin-bottom:32px">
+            <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;font-size:16px;font-weight:bold">
+              Section ${String.fromCharCode(65 + si)} — ${type}
+              <span style="float:right;font-size:14px">[${sectionMarks} marks]</span>
+            </h3>
+            ${qs.map((q, i) => `
+              <div style="margin-bottom:20px">
+                <p style="font-weight:500;margin:0 0 4px 0">
+                  ${q.question_number || i + 1}. ${q.question_text || q.question || q.text}
+                  <span style="float:right;font-size:12px">[${q.marks} mark${q.marks !== 1 ? "s" : ""}]</span>
+                </p>
+                ${q.options ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-left:16px;font-size:14px">
+                  ${q.options.map((opt, j) => `<span>${String.fromCharCode(97 + j)}) ${typeof opt === "object" ? opt.text : opt}</span>`).join("")}
+                </div>` : ""}
+              </div>
+            `).join("")}
+          </div>`;
+      });
+    } else {
+      // mock format
+      const q = paper.questions || {};
+      const renderSection = (title, items, marksLabel) => items?.length ? `
+        <div style="margin-bottom:32px">
+          <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;font-size:16px;font-weight:bold">${title}</h3>
+          ${items.map((q, i) => `<div style="margin-bottom:16px"><p style="font-weight:500;margin:0 0 4px 0">${i+1}. ${q.question}<span style="float:right;font-size:12px">[${q.marks} marks]</span></p></div>`).join("")}
+        </div>` : "";
+      questionsHtml = renderSection("Section A — MCQ", q.mcq) + renderSection("Section B — Short Answer", q.shortAnswer) + renderSection("Section C — Long Answer", q.longAnswer);
+    }
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/><title>${examName}</title>
+<style>body{font-family:serif;padding:40px;max-width:800px;margin:0 auto}h2,h3,p{margin:0}@media print{body{padding:20px}}</style>
+</head><body>
+  <div style="text-align:center;border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px">
+    <h2 style="font-size:18px;font-weight:bold">${examName}</h2>
+    <p style="margin:4px 0">Subject: ${subject} | Grade: ${grade} | Duration: ${duration} min | Max Marks: ${totalMarks}</p>
+    <p style="margin:4px 0;font-size:13px;color:#666">Date: _____________ | Name: _________________________ | Roll No: _______</p>
+  </div>
+  <div style="margin-bottom:24px">
+    <strong>General Instructions:</strong>
+    <ol style="font-size:13px;line-height:1.8;margin-top:8px">
+      <li>All questions are compulsory.</li>
+      <li>Read each question carefully before answering.</li>
+      <li>Marks for each question are indicated in brackets.</li>
+    </ol>
+  </div>
+  ${questionsHtml}
+  <div style="text-align:center;border-top:1px solid #ccc;padding-top:12px;font-size:12px;color:#888;margin-top:40px">*** End of Question Paper ***</div>
+  <script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+  };
 
   return (
     <div style={{ padding: "32px 40px", backgroundColor: "#F0F4F8", minHeight: "100vh" }}>
@@ -159,7 +233,7 @@ export default function PaperPreviewPage() {
       {/* Action buttons */}
       <div className="no-print" style={{ display: "flex", gap: 12, marginBottom: 24, maxWidth: 800, margin: "0 auto 24px" }}>
         <button onClick={() => navigate("/generate")} style={btnStyle("outline")}>← Back</button>
-        <button onClick={() => window.print()} style={btnStyle("primary")}>🖨️ Download / Print PDF</button>
+        <button onClick={handlePrint} style={btnStyle("primary")}>🖨️ Download / Print PDF</button>
         <button onClick={() => { navigator.clipboard.writeText(window.location.href); showToast("Link copied!"); }} style={btnStyle("outline")}>🔗 Share</button>
         {paper.generation_id && (
           <span style={{ marginLeft: "auto", fontSize: 11, color: "#9CA3AF", alignSelf: "center" }}>

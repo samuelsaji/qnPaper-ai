@@ -239,7 +239,6 @@ function PaperPreviewModal({ paper, onClose }) {
   const questions = paper.questions || [];
   const isAI = Array.isArray(questions);
 
-  // Group by type for AI questions
   const typeOrder = [];
   const byType = {};
   if (isAI) {
@@ -255,6 +254,72 @@ function PaperPreviewModal({ paper, onClose }) {
   const subject = paper.subject || "—";
   const totalMarks = paper.total_marks || paper.totalMarks || "—";
 
+  const handlePrint = () => {
+    // Build self-contained HTML for a new print window
+    let questionsHtml = "";
+    if (isAI && typeOrder.length > 0) {
+      typeOrder.forEach((type, si) => {
+        const qs = byType[type];
+        const sectionMarks = qs.reduce((s, q) => s + (Number(q.marks) || 0), 0);
+        questionsHtml += `
+          <div style="margin-bottom:32px">
+            <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;font-size:16px;font-weight:bold">
+              Section ${String.fromCharCode(65 + si)} — ${type}
+              <span style="float:right;font-size:14px">[${sectionMarks} marks]</span>
+            </h3>
+            ${qs.map((q, i) => `
+              <div style="margin-bottom:20px">
+                <p style="font-weight:500;margin:0 0 4px 0">
+                  ${q.question_number || i + 1}. ${q.question_text || q.question || q.text}
+                  <span style="float:right;font-size:12px">[${q.marks} mark${q.marks !== 1 ? "s" : ""}]</span>
+                </p>
+                ${q.options ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-left:16px;font-size:14px">
+                  ${q.options.map((opt, j) => `<span>${String.fromCharCode(97 + j)}) ${typeof opt === "object" ? opt.text : opt}</span>`).join("")}
+                </div>` : ""}
+              </div>
+            `).join("")}
+          </div>`;
+      });
+    }
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>${examName}</title>
+  <style>
+    body { font-family: serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+    h2, h3, p { margin: 0; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div style="text-align:center;border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px">
+    <h2 style="font-size:18px;font-weight:bold">${examName}</h2>
+    <p style="margin:4px 0">Subject: ${subject} | Max Marks: ${totalMarks}</p>
+    <p style="margin:4px 0;font-size:13px;color:#666">Date: _____________ | Name: _________________________ | Roll No: _______</p>
+  </div>
+  <div style="margin-bottom:24px">
+    <strong>General Instructions:</strong>
+    <ol style="font-size:13px;line-height:1.8;margin-top:8px">
+      <li>All questions are compulsory.</li>
+      <li>Read each question carefully before answering.</li>
+      <li>Marks for each question are indicated in brackets.</li>
+    </ol>
+  </div>
+  ${questionsHtml}
+  <div style="text-align:center;border-top:1px solid #ccc;padding-top:12px;font-size:12px;color:#888;margin-top:40px">
+    *** End of Question Paper ***
+  </div>
+  <script>window.onload = function(){ window.print(); }<\/script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2000, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
       <div style={{ backgroundColor: "white", borderRadius: 12, width: "100%", maxWidth: 800, position: "relative" }}>
@@ -263,11 +328,7 @@ function PaperPreviewModal({ paper, onClose }) {
           <span style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{examName}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={() => {
-                // Set as current paper and open print
-                localStorage.setItem("qp_current_paper", JSON.stringify(paper));
-                window.print();
-              }}
+              onClick={handlePrint}
               style={{ backgroundColor: "#2563EB", color: "white", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             >
               🖨️ Download / Print
@@ -315,7 +376,6 @@ function PaperPreviewModal({ paper, onClose }) {
                         {q.question_number || i + 1}. {q.question_text || q.question || q.text}
                         <span style={{ float: "right", fontSize: 12 }}>[{q.marks} mark{q.marks !== 1 ? "s" : ""}]</span>
                       </p>
-                      {q.topic && <p style={{ fontSize: 11, color: "#9CA3AF", margin: "0 0 4px 16px" }}>Topic: {q.topic}{q.difficulty ? ` · ${q.difficulty}` : ""}</p>}
                       {q.options && (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginLeft: 16, fontSize: 14 }}>
                           {q.options.map((opt, j) => <span key={j}>{String.fromCharCode(97 + j)}) {typeof opt === "object" ? opt.text : opt}</span>)}

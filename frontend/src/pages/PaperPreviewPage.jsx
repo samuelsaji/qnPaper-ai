@@ -1,7 +1,112 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// Render questions from the AI backend (flat array with type field)
+// ── Layout-based rendering (uses saved QuestionPaperLayout structure) ─────────
+
+function LayoutPaper({ paper }) {
+  const layout = paper.layout;
+  const header = layout.header || {};
+  const parts = layout.parts || [];
+  let qNum = 0;
+
+  const totalMarks = parts.reduce((s, p) =>
+    s + (p.questions || []).reduce((a, q) => a + (q.primary?.marks || 0), 0), 0);
+
+  return (
+    <div style={{ fontFamily: "Georgia, serif", fontSize: 14 }}>
+      {/* Header */}
+      <div style={{ borderBottom: "2.5px solid #111", paddingBottom: 20, marginBottom: 20, textAlign: "center" }}>
+        {header.logo && <img src={header.logo} alt="logo" style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 8 }} />}
+        <div style={{ fontSize: 18, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#111" }}>
+          {header.collegeName || paper.examName || "Question Paper"}
+        </div>
+        {header.examTitle && <div style={{ fontSize: 14, fontWeight: 700, color: "#374151", marginTop: 4 }}>{header.examTitle}</div>}
+        <div style={{ marginTop: 10, display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "0 32px", fontSize: 12, color: "#374151" }}>
+          {(header.subject || paper.subject) && <span><strong>Subject:</strong> {header.subject || paper.subject}{header.subjectCode ? ` (${header.subjectCode})` : ""}</span>}
+          {header.semester && <span><strong>Class:</strong> {header.semester}</span>}
+          {header.date && <span><strong>Date:</strong> {header.date}</span>}
+          {header.duration && <span><strong>Duration:</strong> {header.duration}</span>}
+          <span><strong>Max Marks:</strong> {header.maxMarks || totalMarks || paper.totalMarks}</span>
+        </div>
+        <div style={{ marginTop: 10, borderTop: "1px dashed #ccc", paddingTop: 8, display: "flex", gap: 40, justifyContent: "center", fontSize: 12, color: "#555" }}>
+          <span>Name: ________________________________</span>
+          <span>Roll No: ______________</span>
+          <span>Reg No: ______________</span>
+        </div>
+      </div>
+
+      {/* Instructions */}
+      <div style={{ marginBottom: 20, padding: "10px 0", borderBottom: "1px solid #eee" }}>
+        <strong style={{ fontSize: 13 }}>General Instructions:</strong>
+        <ol style={{ fontSize: 13, lineHeight: 1.9, marginTop: 6, paddingLeft: 20 }}>
+          <li>All questions are compulsory unless stated otherwise.</li>
+          <li>Read each question carefully before answering.</li>
+          <li>Marks for each question are indicated in brackets [ ].</li>
+          {paper.instructions && <li>{paper.instructions}</li>}
+        </ol>
+      </div>
+
+      {/* Parts */}
+      {parts.map((part, pi) => {
+        const partMarks = (part.questions || []).reduce((s, q) => s + (q.primary?.marks || 0), 0);
+        return (
+          <div key={part.id || pi} style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1.5px solid #999", paddingBottom: 6, marginBottom: 14 }}>
+              <div>
+                <span style={{ fontWeight: 800, fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>{part.name}</span>
+                {part.instruction && <span style={{ marginLeft: 10, fontSize: 12, color: "#666", fontStyle: "italic" }}>({part.instruction})</span>}
+              </div>
+              <span style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>[{partMarks} marks]</span>
+            </div>
+
+            {(part.questions || []).map((q, qi) => {
+              qNum++;
+              const n = qNum;
+              const text = q.primary?.text || "";
+              const marks = q.primary?.marks || 0;
+              return (
+                <div key={q.id || qi} style={{ marginBottom: 18 }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <span style={{ fontWeight: 700, minWidth: 24, flexShrink: 0 }}>{n}.</span>
+                    <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+                      <p style={{ margin: 0, lineHeight: 1.75, flex: 1, color: text ? "#111" : "#aaa", fontStyle: text ? "normal" : "italic" }}>
+                        {text || "Question not generated"}
+                      </p>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#555", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4, flexShrink: 0 }}>
+                        [{marks} mark{marks !== 1 ? "s" : ""}]
+                      </span>
+                    </div>
+                  </div>
+                  {q.mode === "or" && q.alternative?.text && (
+                    <div style={{ marginLeft: 34, marginTop: 8 }}>
+                      <p style={{ textAlign: "center", fontSize: 11, color: "#999", fontWeight: 700, margin: "4px 0 8px" }}>— OR —</p>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <span style={{ fontWeight: 700, minWidth: 24, flexShrink: 0 }}>{n}.</span>
+                        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", gap: 16 }}>
+                          <p style={{ margin: 0, lineHeight: 1.75, flex: 1 }}>{q.alternative.text}</p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#555", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
+                            [{q.alternative.marks || marks} mark{(q.alternative.marks || marks) !== 1 ? "s" : ""}]
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      <div style={{ textAlign: "center", borderTop: "1px solid #ddd", paddingTop: 12, fontSize: 12, color: "#999", marginTop: 24 }}>
+        ✦ ✦ ✦ &nbsp; End of Question Paper &nbsp; ✦ ✦ ✦
+      </div>
+    </div>
+  );
+}
+
+// ── Default AI questions grouped by type ──────────────────────────────────────
+
 function AIQuestions({ questions }) {
   const typeOrder = [];
   const byType = {};
@@ -12,112 +117,41 @@ function AIQuestions({ questions }) {
     byType[type].push(q);
   });
 
+  let globalN = 0;
   return typeOrder.map((type, si) => {
     const qs = byType[type];
+    const secMarks = qs.reduce((s, q) => s + (Number(q.marks) || 0), 0);
     return (
       <div key={type} style={{ marginBottom: 32 }}>
-        <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 16, fontWeight: "bold" }}>
-          Section {String.fromCharCode(65 + si)} — {type}
-          <span style={{ float: "right", fontSize: 14 }}>
-            [{qs.reduce((s, q) => s + (Number(q.marks) || 0), 0)} marks]
-          </span>
+        <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 15, fontWeight: "bold", display: "flex", justifyContent: "space-between" }}>
+          <span>Section {String.fromCharCode(65 + si)} — {type}</span>
+          <span style={{ fontSize: 13 }}>[{secMarks} marks]</span>
         </h3>
-        {qs.map((q, i) => (
-          <div key={i} style={{ marginBottom: 20 }}>
-            <p style={{ fontWeight: 500, margin: "0 0 4px 0" }}>
-              {q.question_number || i + 1}. {q.question_text || q.question || q.text}
-              <span style={{ float: "right", fontSize: 12 }}>[{q.marks} mark{q.marks !== 1 ? "s" : ""}]</span>
-            </p>
-            {q.topic && (
-              <p style={{ fontSize: 11, color: "#9CA3AF", margin: "0 0 4px 16px" }}>
-                Topic: {q.topic}{q.difficulty ? ` · ${q.difficulty}` : ""}
-              </p>
-            )}
-            {q.options && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginLeft: 16, fontSize: 14 }}>
-                {q.options.map((opt, j) => (
-                  <span key={j}>{String.fromCharCode(97 + j)}) {typeof opt === "object" ? opt.text || JSON.stringify(opt) : opt}</span>
-                ))}
+        {qs.map((q, i) => {
+          globalN++;
+          return (
+            <div key={i} style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+                <p style={{ fontWeight: 500, margin: "0 0 4px 0", flex: 1 }}>
+                  {globalN}. {q.question_text || q.question || q.text}
+                </p>
+                <span style={{ fontSize: 12, color: "#666", flexShrink: 0 }}>[{q.marks} mark{q.marks !== 1 ? "s" : ""}]</span>
               </div>
-            )}
-            {!q.options && (
-              <div style={{ borderBottom: "1px solid #eee", marginTop: 8, marginBottom: 8 }} />
-            )}
-          </div>
-        ))}
+              {q.options && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginLeft: 16, fontSize: 13 }}>
+                  {q.options.map((opt, j) => <span key={j}>{String.fromCharCode(97 + j)}) {typeof opt === "object" ? opt.text : opt}</span>)}
+                </div>
+              )}
+              {!q.options && <div style={{ borderBottom: "1px solid #f0f0f0", marginTop: 8 }} />}
+            </div>
+          );
+        })}
       </div>
     );
   });
 }
 
-// Render questions from the mock local generator (object with mcq / shortAnswer / longAnswer keys)
-function MockQuestions({ questions }) {
-  return (
-    <>
-      {questions.mcq?.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 16, fontWeight: "bold" }}>
-            Section A — Multiple Choice Questions
-            <span style={{ float: "right", fontSize: 14 }}>
-              [{questions.mcq.length} × {questions.mcq[0]?.marks} = {questions.mcq.reduce((s, q) => s + q.marks, 0)} marks]
-            </span>
-          </h3>
-          {questions.mcq.map((q, i) => (
-            <div key={i} style={{ marginBottom: 16 }}>
-              <p style={{ fontWeight: 500, margin: "0 0 8px 0" }}>
-                {i + 1}. {q.question}
-                <span style={{ float: "right", fontSize: 12 }}>[{q.marks} mark]</span>
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginLeft: 16, fontSize: 14 }}>
-                {q.options?.map((opt, j) => <span key={j}>{String.fromCharCode(97 + j)}) {opt}</span>)}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {questions.shortAnswer?.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 16, fontWeight: "bold" }}>
-            Section B — Short Answer Questions
-            <span style={{ float: "right", fontSize: 14 }}>
-              [{questions.shortAnswer.length} × {questions.shortAnswer[0]?.marks} = {questions.shortAnswer.reduce((s, q) => s + q.marks, 0)} marks]
-            </span>
-          </h3>
-          {questions.shortAnswer.map((q, i) => (
-            <div key={i} style={{ marginBottom: 20 }}>
-              <p style={{ fontWeight: 500, margin: "0 0 8px 0" }}>
-                {i + 1}. {q.question}
-                <span style={{ float: "right", fontSize: 12 }}>[{q.marks} marks]</span>
-              </p>
-              <div style={{ borderBottom: "1px solid #eee", marginTop: 8, marginBottom: 8 }} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {questions.longAnswer?.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 16, fontWeight: "bold" }}>
-            Section C — Long Answer Questions
-            <span style={{ float: "right", fontSize: 14 }}>
-              [{questions.longAnswer.length} × {questions.longAnswer[0]?.marks} = {questions.longAnswer.reduce((s, q) => s + q.marks, 0)} marks]
-            </span>
-          </h3>
-          {questions.longAnswer.map((q, i) => (
-            <div key={i} style={{ marginBottom: 28 }}>
-              <p style={{ fontWeight: 500, margin: "0 0 8px 0" }}>
-                {i + 1}. {q.question}
-                <span style={{ float: "right", fontSize: 12 }}>[{q.marks} marks]</span>
-              </p>
-              <div style={{ borderBottom: "1px solid #eee", marginTop: 8, marginBottom: 8 }} />
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function PaperPreviewPage() {
   const navigate = useNavigate();
@@ -132,155 +166,76 @@ export default function PaperPreviewPage() {
     try { setPaper(JSON.parse(raw)); } catch { navigate("/generate"); }
   }, []);
 
-  if (!paper) {
-    return <div style={{ padding: 40, textAlign: "center", color: "#6B7280" }}>Loading paper...</div>;
-  }
+  if (!paper) return <div style={{ padding: 40, textAlign: "center", color: "#6B7280" }}>Loading paper...</div>;
 
-  const isAI = paper.source === "ai" || (paper.questions && Array.isArray(paper.questions));
-  const totalMarks = paper.total_marks || paper.totalMarks || "—";
-  const duration = paper.duration || "—";
-  const subject = paper.subject || "—";
-  const grade = paper.grade || "—";
+  const hasLayout = !!paper.layout?.parts?.length;
+  const isAI = paper.source === "ai" || Array.isArray(paper.questions);
   const examName = paper.examName || paper.title || "Question Paper";
+  const subject = paper.subject || "—";
+  const totalMarks = paper.total_marks || paper.totalMarks || "—";
   const questionCount = paper.question_count || (isAI ? (paper.questions || []).length : null);
 
   const handlePrint = () => {
-    const questions = paper.questions || [];
-    const typeOrder = [];
-    const byType = {};
-    if (isAI) {
-      questions.forEach((q) => {
-        const raw = q.type || q.question_type || "general";
-        const type = raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-        if (!byType[type]) { byType[type] = []; typeOrder.push(type); }
-        byType[type].push(q);
-      });
-    }
-
-    let questionsHtml = "";
-    if (isAI && typeOrder.length > 0) {
-      typeOrder.forEach((type, si) => {
-        const qs = byType[type];
-        const sectionMarks = qs.reduce((s, q) => s + (Number(q.marks) || 0), 0);
-        questionsHtml += `
-          <div style="margin-bottom:32px">
-            <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;font-size:16px;font-weight:bold">
-              Section ${String.fromCharCode(65 + si)} — ${type}
-              <span style="float:right;font-size:14px">[${sectionMarks} marks]</span>
-            </h3>
-            ${qs.map((q, i) => `
-              <div style="margin-bottom:20px">
-                <p style="font-weight:500;margin:0 0 4px 0">
-                  ${q.question_number || i + 1}. ${q.question_text || q.question || q.text}
-                  <span style="float:right;font-size:12px">[${q.marks} mark${q.marks !== 1 ? "s" : ""}]</span>
-                </p>
-                ${q.options ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-left:16px;font-size:14px">
-                  ${q.options.map((opt, j) => `<span>${String.fromCharCode(97 + j)}) ${typeof opt === "object" ? opt.text : opt}</span>`).join("")}
-                </div>` : ""}
-              </div>
-            `).join("")}
-          </div>`;
-      });
-    } else {
-      // mock format
-      const q = paper.questions || {};
-      const renderSection = (title, items, marksLabel) => items?.length ? `
-        <div style="margin-bottom:32px">
-          <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;font-size:16px;font-weight:bold">${title}</h3>
-          ${items.map((q, i) => `<div style="margin-bottom:16px"><p style="font-weight:500;margin:0 0 4px 0">${i+1}. ${q.question}<span style="float:right;font-size:12px">[${q.marks} marks]</span></p></div>`).join("")}
-        </div>` : "";
-      questionsHtml = renderSection("Section A — MCQ", q.mcq) + renderSection("Section B — Short Answer", q.shortAnswer) + renderSection("Section C — Long Answer", q.longAnswer);
-    }
-
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/><title>${examName}</title>
-<style>body{font-family:serif;padding:40px;max-width:800px;margin:0 auto}h2,h3,p{margin:0}@media print{body{padding:20px}}</style>
-</head><body>
-  <div style="text-align:center;border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px">
-    <h2 style="font-size:18px;font-weight:bold">${examName}</h2>
-    <p style="margin:4px 0">Subject: ${subject} | Grade: ${grade} | Duration: ${duration} min | Max Marks: ${totalMarks}</p>
-    <p style="margin:4px 0;font-size:13px;color:#666">Date: _____________ | Name: _________________________ | Roll No: _______</p>
-  </div>
-  <div style="margin-bottom:24px">
-    <strong>General Instructions:</strong>
-    <ol style="font-size:13px;line-height:1.8;margin-top:8px">
-      <li>All questions are compulsory.</li>
-      <li>Read each question carefully before answering.</li>
-      <li>Marks for each question are indicated in brackets.</li>
-    </ol>
-  </div>
-  ${questionsHtml}
-  <div style="text-align:center;border-top:1px solid #ccc;padding-top:12px;font-size:12px;color:#888;margin-top:40px">*** End of Question Paper ***</div>
-  <script>window.onload=function(){window.print();}<\/script>
-</body></html>`;
-
     const win = window.open("", "_blank");
-    win.document.write(html);
+    const content = document.getElementById("paper-content")?.innerHTML || "";
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+      <title>${examName}</title>
+      <style>body{font-family:Georgia,serif;padding:40px;max-width:800px;margin:0 auto}
+      h2,h3,p{margin:0}@media print{body{padding:20px}}</style>
+    </head><body>${content}
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
     win.document.close();
   };
 
   return (
     <div style={{ padding: "32px 40px", backgroundColor: "#F0F4F8", minHeight: "100vh" }}>
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          #paper-content { padding: 0 !important; box-shadow: none !important; margin: 0 auto !important; width: 100% !important; max-width: 100% !important; border: none !important; }
-          body { background: white !important; }
-          main { margin: 0 !important; padding: 0 !important; }
-        }
-      `}</style>
+      <style>{`@media print{.no-print{display:none!important}#paper-content{box-shadow:none!important;border:none!important}body{background:white!important}main{margin:0!important;padding:0!important}}`}</style>
 
-      {/* Action buttons */}
-      <div className="no-print" style={{ display: "flex", gap: 12, marginBottom: 24, maxWidth: 800, margin: "0 auto 24px" }}>
-        <button onClick={() => navigate("/generate")} style={btnStyle("outline")}>← Back</button>
-        <button onClick={handlePrint} style={btnStyle("primary")}>🖨️ Download / Print PDF</button>
-        <button onClick={() => { navigator.clipboard.writeText(window.location.href); showToast("Link copied!"); }} style={btnStyle("outline")}>🔗 Share</button>
+      {/* Action bar */}
+      <div className="no-print" style={{ display: "flex", gap: 12, maxWidth: 800, margin: "0 auto 16px", flexWrap: "wrap" }}>
+        <button onClick={() => navigate("/generate")} style={btn("outline")}>← Back</button>
+        <button onClick={handlePrint} style={btn("primary")}>🖨️ Download / Print PDF</button>
         {paper.generation_id && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "#9CA3AF", alignSelf: "center" }}>
-            ID: {paper.generation_id}
-          </span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "#9CA3AF", alignSelf: "center" }}>ID: {paper.generation_id}</span>
         )}
       </div>
 
-      {/* AI badge */}
+      {/* Badge */}
       {isAI && (
-        <div className="no-print" style={{ maxWidth: 800, margin: "0 auto 16px", backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#15803D", fontWeight: 600 }}>
+        <div className="no-print" style={{ maxWidth: 800, margin: "0 auto 16px", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#15803D", fontWeight: 600 }}>
           ⚡ Generated by Gemini AI · {questionCount} questions
+          {hasLayout && <span style={{ marginLeft: 12, color: "#2563EB" }}>📄 Using custom layout</span>}
         </div>
       )}
 
       {/* Paper */}
-      <div id="paper-content" style={{ maxWidth: 800, margin: "0 auto", background: "white", padding: 40, fontFamily: "serif", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #E2E8F0" }}>
-        {/* Header */}
-        <div style={{ textAlign: "center", borderBottom: "2px solid #111", paddingBottom: 16, marginBottom: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: "bold", margin: 0 }}>{examName}</h2>
-          <p style={{ margin: "4px 0" }}>Subject: {subject} | Grade: {grade} | Duration: {duration} min | Max Marks: {totalMarks}</p>
-          <p style={{ margin: "4px 0", fontSize: 13, color: "#666" }}>
-            Date: _____________ | Name: _________________________ | Roll No: _______
-          </p>
-        </div>
-
-        {/* Instructions */}
-        <div style={{ marginBottom: 24 }}>
-          <strong>General Instructions:</strong>
-          <ol style={{ fontSize: 13, lineHeight: 1.8, marginTop: 8 }}>
-            <li>All questions are compulsory.</li>
-            <li>Read each question carefully before answering.</li>
-            <li>Marks for each question are indicated in brackets.</li>
-            {paper.instructions && <li>{paper.instructions}</li>}
-          </ol>
-        </div>
-
-        {/* Questions */}
-        {isAI
-          ? <AIQuestions questions={paper.questions} />
-          : <MockQuestions questions={paper.questions || {}} />
-        }
-
-        {/* Footer */}
-        <div style={{ textAlign: "center", borderTop: "1px solid #ccc", paddingTop: 12, fontSize: 12, color: "#888", marginTop: 40 }}>
-          *** End of Question Paper ***
-        </div>
+      <div id="paper-content" style={{ maxWidth: 800, margin: "0 auto", background: "white", padding: 40, fontFamily: "Georgia, serif", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #E2E8F0" }}>
+        {hasLayout ? (
+          <LayoutPaper paper={paper} />
+        ) : (
+          <>
+            {/* Default header */}
+            <div style={{ textAlign: "center", borderBottom: "2px solid #111", paddingBottom: 16, marginBottom: 24 }}>
+              <h2 style={{ fontSize: 18, fontWeight: "bold", margin: 0 }}>{examName}</h2>
+              <p style={{ margin: "4px 0", fontSize: 13 }}>Subject: {subject} | Max Marks: {totalMarks}</p>
+              <p style={{ margin: "4px 0", fontSize: 12, color: "#666" }}>Date: _____________ | Name: _________________________ | Roll No: _______</p>
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <strong>General Instructions:</strong>
+              <ol style={{ fontSize: 13, lineHeight: 1.8, marginTop: 8 }}>
+                <li>All questions are compulsory.</li>
+                <li>Read each question carefully before answering.</li>
+                <li>Marks for each question are indicated in brackets.</li>
+                {paper.instructions && <li>{paper.instructions}</li>}
+              </ol>
+            </div>
+            {isAI
+              ? <AIQuestions questions={paper.questions} />
+              : <MockQuestions questions={paper.questions || {}} />
+            }
+            <div style={{ textAlign: "center", borderTop: "1px solid #ccc", paddingTop: 12, fontSize: 12, color: "#888", marginTop: 40 }}>*** End of Question Paper ***</div>
+          </>
+        )}
       </div>
 
       {toast && (
@@ -292,8 +247,51 @@ export default function PaperPreviewPage() {
   );
 }
 
-function btnStyle(variant) {
+function MockQuestions({ questions }) {
+  return (
+    <>
+      {questions.mcq?.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 15, fontWeight: "bold" }}>Section A — MCQ</h3>
+          {questions.mcq.map((q, i) => (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <p style={{ fontWeight: 500, margin: "0 0 6px" }}>{i + 1}. {q.question} <span style={{ float: "right", fontSize: 12 }}>[{q.marks}]</span></p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginLeft: 16, fontSize: 13 }}>
+                {q.options?.map((o, j) => <span key={j}>{String.fromCharCode(97 + j)}) {o}</span>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {questions.shortAnswer?.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 15, fontWeight: "bold" }}>Section B — Short Answer</h3>
+          {questions.shortAnswer.map((q, i) => (
+            <div key={i} style={{ marginBottom: 18 }}>
+              <p style={{ fontWeight: 500, margin: 0 }}>{i + 1}. {q.question} <span style={{ float: "right", fontSize: 12 }}>[{q.marks}]</span></p>
+              <div style={{ borderBottom: "1px solid #eee", marginTop: 8 }} />
+            </div>
+          ))}
+        </div>
+      )}
+      {questions.longAnswer?.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <h3 style={{ borderBottom: "1px solid #ccc", paddingBottom: 8, fontSize: 15, fontWeight: "bold" }}>Section C — Long Answer</h3>
+          {questions.longAnswer.map((q, i) => (
+            <div key={i} style={{ marginBottom: 24 }}>
+              <p style={{ fontWeight: 500, margin: 0 }}>{i + 1}. {q.question} <span style={{ float: "right", fontSize: 12 }}>[{q.marks}]</span></p>
+              <div style={{ borderBottom: "1px solid #eee", marginTop: 8 }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function btn(variant) {
   const base = { borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 };
-  if (variant === "primary") return { ...base, backgroundColor: "#2563EB", color: "white", border: "none" };
-  return { ...base, backgroundColor: "white", color: "#374151", border: "1px solid #D1D5DB" };
+  return variant === "primary"
+    ? { ...base, backgroundColor: "#2563EB", color: "white", border: "none" }
+    : { ...base, backgroundColor: "white", color: "#374151", border: "1px solid #D1D5DB" };
 }

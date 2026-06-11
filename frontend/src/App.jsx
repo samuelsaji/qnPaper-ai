@@ -7,6 +7,8 @@ import GeneratePage from "./pages/GeneratePage";
 import TemplatesPage from "./pages/TemplatesPage";
 import SettingsPage from "./pages/SettingsPage";
 import PaperPreviewPage from "./pages/PaperPreviewPage";
+import TemplateDetail from "./pages/TemplateDetail";
+import QuestionPaperLayout from "./pages/QuestionPaperLayout";
 import { AuthProvider } from "./context/AuthContext";
 
 // Re-export AuthContext from new location for legacy imports
@@ -33,19 +35,19 @@ function ProtectedRoute({ children }) {
   return token ? children : <Navigate to="/" replace />;
 }
 
-function ProtectedLayout({ children }) {
+function ProtectedLayout({ children, fullScreen = false }) {
   const location = useLocation();
-  const isFullScreen = location.pathname === "/generate";
+  const isFullScreen = fullScreen || location.pathname === "/generate";
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] text-[#111827]">
-      <Sidebar />
+      {!isFullScreen && <Sidebar />}
       <main
         className={[
-          "min-h-screen transition-all duration-200 ml-16 md:ml-[220px]",
+          "min-h-screen transition-all duration-200",
           isFullScreen
-            ? "h-screen overflow-hidden p-0 ml-0 md:ml-0"
-            : "px-5 py-6 md:px-8 lg:p-10",
+            ? "h-screen overflow-hidden p-0"
+            : "ml-16 md:ml-[220px] px-5 py-6 md:px-8 lg:p-10",
         ].join(" ")}
       >
         {children}
@@ -64,6 +66,8 @@ function AppRoutes() {
       <Route path="/templates" element={<ProtectedRoute><ProtectedLayout><ErrorBoundary><TemplatesPage /></ErrorBoundary></ProtectedLayout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><ProtectedLayout><SettingsPage /></ProtectedLayout></ProtectedRoute>} />
       <Route path="/paper-preview" element={<ProtectedRoute><ProtectedLayout><PaperPreviewPage /></ProtectedLayout></ProtectedRoute>} />
+      <Route path="/template/:templateId" element={<ProtectedRoute><ProtectedLayout><ErrorBoundary><TemplateDetail /></ErrorBoundary></ProtectedLayout></ProtectedRoute>} />
+      <Route path="/layout/:templateId" element={<ProtectedRoute><ProtectedLayout fullScreen><ErrorBoundary><QuestionPaperLayout /></ErrorBoundary></ProtectedLayout></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -9,6 +9,7 @@ import {
   apiUploadQuestionPapers,
   apiGetGeneratedPapers,
   apiGetGeneratedPaper,
+  apiGetLayout,
 } from "../utils/api";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -71,9 +72,65 @@ function FilePicker({ label, files, onChange, accept = ".pdf", multiple = true }
   );
 }
 
+// ── Template Choice Modal ─────────────────────────────────────────────────────
+
+function TemplateChoiceModal({ templates, onClose, onSelectExisting, onCreateNew }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", padding: 20 }}>
+      <div style={{ backgroundColor: "white", borderRadius: 16, width: "100%", maxWidth: 560, padding: 32, boxShadow: "0 20px 40px rgba(0,0,0,0.15)", border: "1px solid #E2E8F0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>Choose or Create Template</h2>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF" }}><X size={20} /></button>
+        </div>
+
+        {/* Create new */}
+        <button
+          type="button"
+          onClick={onCreateNew}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", borderRadius: 12, border: "2px solid #2563EB", backgroundColor: "#EFF6FF", cursor: "pointer", marginBottom: 20, textAlign: "left" }}
+        >
+          <div style={{ width: 44, height: 44, backgroundColor: "#2563EB", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <FileText size={20} color="white" />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#1D4ED8" }}>Create New Template</div>
+            <div style={{ fontSize: 12, color: "#3B82F6", marginTop: 2 }}>Upload syllabus, question papers and design your own layout</div>
+          </div>
+        </button>
+
+        {/* Existing templates */}
+        {templates.length > 0 && (
+          <>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Or use an existing template</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 280, overflowY: "auto" }}>
+              {templates.map((t) => (
+                <button
+                  key={t._id || t.id}
+                  type="button"
+                  onClick={() => onSelectExisting(t)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 10, border: "1px solid #E2E8F0", backgroundColor: "white", cursor: "pointer", textAlign: "left" }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, backgroundColor: "#F1F5F9", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📄</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{t.name || "Untitled"}</div>
+                      <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{t.total_marks} marks · {getTimeAgo(t.created_at)}</div>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} color="#9CA3AF" />
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Create Template Modal ─────────────────────────────────────────────────────
 
-function CreateTemplateModal({ userId, onClose, onCreated }) {
+function CreateTemplateModal({ userId, onClose, onCreated, onOpenLayout }) {
   const [step, setStep] = useState(1);
   const [templateId, setTemplateId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -82,7 +139,7 @@ function CreateTemplateModal({ userId, onClose, onCreated }) {
   const [totalMarks, setTotalMarks] = useState(100);
   const [syllabusFiles, setSyllabusFiles] = useState([]);
   const [qpFiles, setQpFiles] = useState([]);
-  const stepLabels = ["Template Details", "Process Syllabus", "Upload Question Papers"];
+  const stepLabels = ["Template Details", "Process Syllabus", "Upload Question Papers", "Design Layout"];
 
   const handleStep1 = async () => {
     setError("");
@@ -117,7 +174,7 @@ function CreateTemplateModal({ userId, onClose, onCreated }) {
       qpFiles.forEach((f) => fd.append("question_papers", f));
       await apiUploadQuestionPapers(fd);
       onCreated();
-      onClose();
+      setStep(4);
     } catch (err) {
       setError(err.message || "Failed to upload question papers");
     } finally {
@@ -178,6 +235,22 @@ function CreateTemplateModal({ userId, onClose, onCreated }) {
             </button>
           </div>
         )}
+        {step === 4 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#15803D", fontWeight: 600 }}>✓ Question papers uploaded successfully!</div>
+            <p style={{ fontSize: 13, color: "#6B7280" }}>Now design your question paper layout — set the header, parts, and question structure for this template.</p>
+            <button
+              type="button"
+              onClick={() => onOpenLayout && onOpenLayout(templateId)}
+              style={{ height: 44, borderRadius: 10, backgroundColor: "#111827", color: "white", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+            >
+              ✏️ Open Layout Builder →
+            </button>
+            <button type="button" onClick={onClose} style={{ height: 40, borderRadius: 10, backgroundColor: "transparent", color: "#6B7280", border: "1px solid #E2E8F0", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              Skip for now
+            </button>
+          </div>
+        )}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
@@ -187,8 +260,10 @@ function CreateTemplateModal({ userId, onClose, onCreated }) {
 // ── Generated Papers List (inside template card) ──────────────────────────────
 
 function GeneratedPapersList({ templateId, onView }) {
+  const navigate = useNavigate();
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewingId, setViewingId] = useState(null);
 
   useEffect(() => {
     apiGetGeneratedPapers(templateId)
@@ -196,6 +271,56 @@ function GeneratedPapersList({ templateId, onView }) {
       .catch(() => setPapers([]))
       .finally(() => setLoading(false));
   }, [templateId]);
+
+  const handleView = async (p) => {
+    setViewingId(p._id || p.id);
+    try {
+      const paperWithLayout = { ...p };
+
+      // Only apply layout if this paper was generated with a custom layout
+      const layoutId = p.usedLayoutId || p.layout_id;
+      if (layoutId && layoutId !== "default" && Array.isArray(p.questions) && p.questions.length > 0) {
+        const layoutRes = await apiGetLayout(layoutId).catch(() => null);
+        if (layoutRes?.layout?.parts?.length) {
+          const allQ = [...p.questions];
+          let qi = 0;
+          const filledParts = layoutRes.layout.parts.map((part) => ({
+            ...part,
+            questions: part.questions.map((pq) => {
+              const gq = allQ[qi++];
+              if (!gq) return pq;
+              return {
+                ...pq,
+                primary: {
+                  ...pq.primary,
+                  text: gq.question_text || gq.question || gq.text || "",
+                  marks: gq.marks || pq.primary.marks,
+                },
+              };
+            }),
+          }));
+          paperWithLayout.layout = {
+            ...layoutRes.layout,
+            parts: filledParts,
+            header: {
+              ...layoutRes.layout.header,
+              examTitle: p.examName || p.title || layoutRes.layout.header?.examTitle || "",
+              subject: p.subject || layoutRes.layout.header?.subject || "",
+              maxMarks: String(p.total_marks || layoutRes.layout.header?.maxMarks || ""),
+            },
+          };
+        }
+      }
+
+      localStorage.setItem("qp_current_paper", JSON.stringify(paperWithLayout));
+      navigate("/paper-preview");
+    } catch {
+      localStorage.setItem("qp_current_paper", JSON.stringify(p));
+      navigate("/paper-preview");
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   if (loading) return (
     <div style={{ padding: "16px 0", textAlign: "center" }}>
@@ -214,6 +339,7 @@ function GeneratedPapersList({ templateId, onView }) {
         const qCount = p.question_count || (p.questions || []).length || 0;
         const marks = p.total_marks || "—";
         const date = getTimeAgo(p.generated_at || p.created_at);
+        const isLoading = viewingId === (p._id || p.id);
         return (
           <div key={p._id || i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 14px" }}>
             <div>
@@ -221,10 +347,12 @@ function GeneratedPapersList({ templateId, onView }) {
               <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{qCount} questions · {marks} marks · {date}</div>
             </div>
             <button
-              onClick={() => onView(p)}
-              style={{ display: "flex", alignItems: "center", gap: 6, backgroundColor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              onClick={() => handleView(p)}
+              disabled={isLoading}
+              style={{ display: "flex", alignItems: "center", gap: 6, backgroundColor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: isLoading ? "wait" : "pointer", opacity: isLoading ? 0.6 : 1 }}
             >
-              <Eye size={13} /> View
+              {isLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Eye size={13} />}
+              {isLoading ? "Loading…" : "View"}
             </button>
           </div>
         );
@@ -407,6 +535,7 @@ function PaperPreviewModal({ paper, onClose }) {
 // ── Template Card ─────────────────────────────────────────────────────────────
 
 function TemplateCard({ t, onGenerateClick }) {
+  const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const [viewPaper, setViewPaper] = useState(null);
   const id = t._id || t.id;
@@ -432,7 +561,7 @@ function TemplateCard({ t, onGenerateClick }) {
                 style={{ display: "flex", alignItems: "center", gap: 4, backgroundColor: "white", color: "#374151", border: "1px solid #E2E8F0", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
               >
                 {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                Generated Papers
+                Papers
               </button>
               <button
                 onClick={() => onGenerateClick(t)}
@@ -466,6 +595,7 @@ export default function TemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showChoiceModal, setShowChoiceModal] = useState(false);
   const [toast, setToast] = useState("");
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
@@ -486,9 +616,20 @@ export default function TemplatesPage() {
   useEffect(() => { fetchTemplates(); }, [currentUser]);
 
   const handleGenerateClick = (template) => {
-    localStorage.setItem("qp_selected_template_id", template._id || template.id);
+    const tid = template._id || template.id;
+    localStorage.setItem("qp_selected_template_id", tid);
     localStorage.setItem("qp_selected_template_name", template.name || "");
+    const cached = localStorage.getItem(`qp_cfg_${tid}`);
+    if (cached) {
+      localStorage.setItem("qp_template_prefill", cached);
+      localStorage.setItem("qp_prefill_source", "template_use");
+    }
     navigate("/generate");
+  };
+
+  const handleTemplateCreated = () => {
+    fetchTemplates();
+    showToast("Template created successfully!");
   };
 
   return (
@@ -501,8 +642,8 @@ export default function TemplatesPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", margin: 0 }}>Templates</h1>
           <p style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>{templates.length} template{templates.length !== 1 ? "s" : ""} found</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} style={{ backgroundColor: "#2563EB", color: "white", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-          + Create New
+        <button onClick={() => setShowChoiceModal(true)} style={{ backgroundColor: "#2563EB", color: "white", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          + New Template
         </button>
       </div>
 
@@ -517,7 +658,7 @@ export default function TemplatesPage() {
           <FileText size={40} style={{ color: "#D1D5DB", margin: "0 auto 16px" }} />
           <p style={{ fontWeight: 700, color: "#111827", marginBottom: 8 }}>No templates yet</p>
           <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>Create your first template by uploading a syllabus and question papers.</p>
-          <button onClick={() => setShowCreateModal(true)} style={{ backgroundColor: "#2563EB", color: "white", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>+ Create Template</button>
+          <button onClick={() => setShowChoiceModal(true)} style={{ backgroundColor: "#2563EB", color: "white", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>+ Create Template</button>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
@@ -527,11 +668,31 @@ export default function TemplatesPage() {
         </div>
       )}
 
+      {/* Choice modal: Choose existing or create new */}
+      {showChoiceModal && (
+        <TemplateChoiceModal
+          templates={templates}
+          onClose={() => setShowChoiceModal(false)}
+          onSelectExisting={(t) => {
+            setShowChoiceModal(false);
+            navigate(`/template/${t._id || t.id}`);
+          }}
+          onCreateNew={() => {
+            setShowChoiceModal(false);
+            setShowCreateModal(true);
+          }}
+        />
+      )}
+
       {showCreateModal && (
         <CreateTemplateModal
           userId={currentUser?.user_id}
           onClose={() => setShowCreateModal(false)}
-          onCreated={() => { fetchTemplates(); showToast("Template created successfully!"); }}
+          onCreated={handleTemplateCreated}
+          onOpenLayout={(templateId) => {
+            setShowCreateModal(false);
+            navigate(`/layout/${templateId}`);
+          }}
         />
       )}
 

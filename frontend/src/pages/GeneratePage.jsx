@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useContext } from "react";
-import { ChevronRight, Loader2, Play, Save, X, FileText, BookOpen, AlertTriangle, HelpCircle } from "lucide-react";
+import { ChevronRight, Loader2, Play, Save, X, FileText, BookOpen, AlertTriangle, HelpCircle, LayoutTemplate, Plus } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { SourceCard } from "../components/SourceCard";
@@ -7,7 +7,7 @@ import { SectionBuilder } from "../components/SectionBuilder";
 import { generatePaper } from "../utils/mockGenerate";
 import { getTemplates, savePaper, saveTemplate } from "../utils/storage";
 import { AuthContext } from "../context/AuthContext";
-import { apiGetTemplates, apiGenerate } from "../utils/api";
+import { apiGetTemplates, apiGenerate, apiGetLayout, apiGetConfig, apiSaveConfig } from "../utils/api";
 
 const examPresets = ["Midterm", "Final Exam", "Weekly Quiz", "Practice Test", "Unit Test"];
 const subjects = [
@@ -133,6 +133,83 @@ function SaveTemplateModal({ name, onNameChange, onCancel, onSave }) {
     </div>
   );
 }
+
+// ── Default Layout Preview Modal ──────────────────────────────────────────────
+
+function DefaultLayoutPreviewModal({ onClose, config, sections }) {
+  const sampleSections = sections && sections.length > 0 ? sections : [
+    { id: 1, name: "Section A", questionTypes: ["MCQ"] },
+    { id: 2, name: "Section B", questionTypes: ["Short Answer", "Long Answer"] },
+  ];
+
+  const examName = config?.examName || "Question Paper";
+  const subject = config?.subject || "—";
+  const totalMarks = config?.totalMarks || 100;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 2000, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
+      <div style={{ backgroundColor: "white", borderRadius: 12, width: "100%", maxWidth: 720 }}>
+        {/* Top bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 24px", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, backgroundColor: "white", zIndex: 1, borderRadius: "12px 12px 0 0" }}>
+          <span style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Default Layout — Structure Preview</span>
+          <button onClick={onClose} style={{ background: "none", border: "1px solid #E2E8F0", borderRadius: 8, padding: "7px 12px", cursor: "pointer", color: "#6B7280" }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Paper structure */}
+        <div style={{ padding: "40px 48px", fontFamily: "Georgia, serif", fontSize: 14 }}>
+          {/* Header */}
+          <div style={{ textAlign: "center", borderBottom: "2px solid #111", paddingBottom: 16, marginBottom: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: "bold", margin: 0 }}>{examName}</h2>
+            <p style={{ margin: "6px 0 0", fontSize: 13 }}>Subject: {subject} | Max Marks: {totalMarks}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#888" }}>
+              Date: _____________ | Name: _________________________ | Roll No: _______
+            </p>
+          </div>
+
+          {/* Instructions */}
+          <div style={{ marginBottom: 24 }}>
+            <strong style={{ fontSize: 13 }}>General Instructions:</strong>
+            <ol style={{ fontSize: 13, lineHeight: 1.9, marginTop: 8, paddingLeft: 20 }}>
+              <li>All questions are compulsory.</li>
+              <li>Read each question carefully before answering.</li>
+              <li>Marks for each question are indicated in brackets.</li>
+            </ol>
+          </div>
+
+          {/* Section placeholders */}
+          {sampleSections.map((sec, si) => (
+            <div key={sec.id || si} style={{ marginBottom: 24 }}>
+              <div style={{ borderBottom: "1px solid #ccc", paddingBottom: 7, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontWeight: "bold", fontSize: 14 }}>{sec.name} — {(sec.questionTypes || []).join(", ")}</span>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>[AI generated]</span>
+              </div>
+              {/* Placeholder rows instead of actual questions */}
+              {[1, 2, 3].map(n => (
+                <div key={n} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px dashed #f0f0f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                    <span style={{ fontWeight: 600, color: "#9ca3af", minWidth: 20 }}>{si * 3 + n}.</span>
+                    <div style={{ height: 10, backgroundColor: "#f3f4f6", borderRadius: 4, flex: 1 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: "#d1d5db", marginLeft: 16, flexShrink: 0 }}>[— marks]</span>
+                </div>
+              ))}
+              <p style={{ fontSize: 11, color: "#9ca3af", fontStyle: "italic", marginTop: 8 }}>
+                Questions will be generated by AI based on your syllabus and previous papers.
+              </p>
+            </div>
+          ))}
+
+          <div style={{ textAlign: "center", borderTop: "1px solid #e5e7eb", paddingTop: 12, fontSize: 12, color: "#9ca3af", marginTop: 16 }}>
+            *** Questions generated automatically by AI ***
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 const questionBank = {
   Physics: {
@@ -271,30 +348,160 @@ const generateLongAnswer = (subject, grade, difficulty, count, longMarks) => {
 export default function GeneratePage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [activePreset, setActivePreset] = useState("Midterm");
-  const [config, setConfig] = useState(defaultConfig);
+
+  // Read prefill keys synchronously on first render — before any effect runs
+  const [_initDone] = useState(() => {
+    // This runs once at mount time, synchronously
+    return true;
+  });
+
+  // Capture prefill synchronously so it's available even if currentUser loads late
+  const initPrefill = (() => {
+    try {
+      const raw = localStorage.getItem("qp_template_prefill");
+      const src = localStorage.getItem("qp_prefill_source");
+      const tid = localStorage.getItem("qp_selected_template_id");
+      const tname = localStorage.getItem("qp_selected_template_name");
+      if (raw && (src === "template_use" || src === "template_create")) {
+        localStorage.removeItem("qp_template_prefill");
+        localStorage.removeItem("qp_prefill_source");
+        localStorage.removeItem("qp_selected_template_id");
+        localStorage.removeItem("qp_selected_template_name");
+        return { prefill: JSON.parse(raw), tid, tname };
+      }
+      if (tid) {
+        localStorage.removeItem("qp_selected_template_id");
+        localStorage.removeItem("qp_selected_template_name");
+        return { prefill: null, tid, tname };
+      }
+    } catch { /* */ }
+    return { prefill: null, tid: null, tname: null };
+  })();
+
+  const [activePreset, setActivePreset] = useState(initPrefill.prefill?.activePreset || "Midterm");
+  const [config, setConfig] = useState(() => {
+    const p = initPrefill.prefill;
+    if (p) {
+      return {
+        ...defaultConfig,
+        examName:       String(p.examName       || initPrefill.tname || ""),
+        subject:        String(p.subject        || ""),
+        grade:          String(p.grade          || ""),
+        difficulty:     String(p.difficulty     || "Medium"),
+        totalMarks:     Number(p.totalMarks     || 100),
+        totalQuestions: Number(p.totalQuestions || 50),
+        language:       String(p.language       || "English"),
+      };
+    }
+    return defaultConfig;
+  });
   const [matrix, setMatrix] = useState(defaultMatrix);
   const [blooms, setBlooms] = useState(defaultBlooms);
-  const [sections, setSections] = useState(defaultSections);
-  const [aiInstructions, setAiInstructions] = useState("Generate Questions Based on the Syllabus and PYQ's that Given For this template");
+  const [sections, setSections] = useState(() => {
+    const p = initPrefill.prefill;
+    if (p && Array.isArray(p.sections) && p.sections.length > 0) return p.sections;
+    return defaultSections;
+  });
+  const [aiInstructions, setAiInstructions] = useState(() => {
+    const p = initPrefill.prefill;
+    return p?.notes || p?.aiInstructions || "Generate Questions Based on the Syllabus and PYQ's that Given For this template";
+  });
   const { sharedFiles, setSharedFiles, currentUser } = useContext(AuthContext);
 
   // Backend templates for the selector
   const [backendTemplates, setBackendTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [selectedLayoutId, setSelectedLayoutId] = useState("default");
+  const [savedLayouts, setSavedLayouts] = useState({});
+  const [loadingLayouts, setLoadingLayouts] = useState(false);
+  const [showDefaultPreview, setShowDefaultPreview] = useState(false);
+
   useEffect(() => {
     if (!currentUser?.user_id) return;
-    apiGetTemplates(currentUser.user_id).then((data) => {
-      setBackendTemplates(Array.isArray(data) ? data : []);
-      // Auto-select if navigated from TemplatesPage
-      const preselected = localStorage.getItem("qp_selected_template_id");
-      const preselectedName = localStorage.getItem("qp_selected_template_name");
-      if (preselected) {
-        setSelectedTemplateId(preselected);
-        setConfig((prev) => ({ ...prev, examName: prev.examName || preselectedName || "" }));
-        localStorage.removeItem("qp_selected_template_id");
-        localStorage.removeItem("qp_selected_template_name");
-      }
+
+    // prefill was already applied synchronously via initPrefill
+    // Just set the selected template and handle backend config fetch
+    const { prefill, tid, tname } = initPrefill;
+
+    if (tid) {
+      setSelectedTemplateId(tid);
+      setSelectedLayoutId(tid);
+      if (prefill?.selectedLayoutId) setSelectedLayoutId(prefill.selectedLayoutId);
+      if (prefill?.notes) setAiInstructions(prefill.notes);
+    }
+
+    // If no prefill, fetch saved config from backend for auto-restore
+    if (tid && !prefill) {
+      apiGetConfig(tid)
+        .then((res) => {
+          if (res?.config) {
+            const p = res.config;
+            setConfig(prev => ({
+              ...prev,
+              examName:   String(p.examName   || prev.examName   || tname || ""),
+              subject:    String(p.subject    || prev.subject    || ""),
+              difficulty: String(p.difficulty || prev.difficulty || "Medium"),
+              totalMarks: Number(p.totalMarks || prev.totalMarks || 100),
+              language:   String(p.language   || prev.language   || "English"),
+            }));
+            if (p.notes) setAiInstructions(p.notes);
+            if (p.selectedLayoutId) setSelectedLayoutId(p.selectedLayoutId);
+            if (p.activePreset) setActivePreset(p.activePreset);
+            setOpenPanels(prev => ({ ...prev, basic: true }));
+            showToast("Progress restored — continue where you left off.", "success");
+          }
+        })
+        .catch(() => {
+          const cached = localStorage.getItem(`qp_cfg_${tid}`);
+          if (cached) {
+            try {
+              const p = JSON.parse(cached);
+              setConfig(prev => ({
+                ...prev,
+                examName:   String(p.examName   || prev.examName   || tname || ""),
+                subject:    String(p.subject    || prev.subject    || ""),
+                difficulty: String(p.difficulty || prev.difficulty || "Medium"),
+                totalMarks: Number(p.totalMarks || prev.totalMarks || 100),
+                language:   String(p.language   || prev.language   || "English"),
+              }));
+              if (p.notes) setAiInstructions(p.notes);
+            } catch { /* */ }
+          }
+        });
+    }
+
+    if (tid && prefill) {
+      setOpenPanels(prev => ({ ...prev, basic: true }));
+      showToast("Details loaded — continue where you left off.", "success");
+    }
+
+    // Fetch templates and layouts
+    apiGetTemplates(currentUser.user_id).then(async (data) => {
+      const templates = Array.isArray(data) ? data : [];
+      setBackendTemplates(templates);
+
+      if (templates.length === 0) return;
+      setLoadingLayouts(true);
+       const layoutMap = {};
+      await Promise.all(
+        templates.map(async (t) => {
+          const tid = t._id || t.id;
+          try {
+            const res = await apiGetLayout(tid);
+            if (res?.layout) {
+              layoutMap[tid] = res.layout;
+              localStorage.setItem(`qp_layout_${tid}`, JSON.stringify(res.layout));
+            }
+          } catch {
+            try {
+              const raw = localStorage.getItem(`qp_layout_${tid}`);
+              if (raw) layoutMap[tid] = JSON.parse(raw);
+            } catch { /* */ }
+          }
+        })
+      );
+      setSavedLayouts(layoutMap);
+      setLoadingLayouts(false);
     }).catch(() => {});
   }, [currentUser]);
 
@@ -323,6 +530,7 @@ export default function GeneratePage() {
   };
 
   const [openPanels, setOpenPanels] = useState({
+    layout: true,
     basic: true,
     sections: false,
     instructions: false,
@@ -342,12 +550,51 @@ export default function GeneratePage() {
     }, 3000);
   };
 
-  // Sync templates on load
+  // Sync templates on load — DB fetch or localStorage fallback
   useEffect(() => {
-    const templateId = params.get("template");
-    if (!templateId) return;
+    const dbId = params.get("templateId");
+    const localId = params.get("template");
 
-    const template = getTemplates().find((item) => String(item.id) === String(templateId));
+    if (dbId) {
+      // Fetch saved config from backend
+      Promise.all([
+        apiGetConfig(dbId).catch(() => null),
+        apiGetLayout(dbId).catch(() => null),
+      ]).then(([configRes, layoutRes]) => {
+        const cfg = configRes?.config;
+        if (cfg) {
+          const matchedPreset = examPresets.find(
+            (item) => item.toLowerCase() === String(cfg.examType || "Midterm").toLowerCase()
+          ) || cfg.examType || "Midterm";
+
+          setActivePreset(matchedPreset);
+          setConfig(prev => ({
+            ...prev,
+            examType: matchedPreset,
+            examName: cfg.examName || "",
+            subject: cfg.subject || "",
+            grade: cfg.grade || "",
+            difficulty: cfg.difficulty || "Medium",
+            totalMarks: cfg.totalMarks || 100,
+            language: cfg.language || "English",
+          }));
+          if (cfg.notes) setAiInstructions(cfg.notes);
+          if (cfg.sections) setSections(cfg.sections);
+          if (cfg.blooms) setBlooms(cfg.blooms);
+          setOpenPanels(prev => ({ ...prev, basic: true }));
+        }
+        setSelectedTemplateId(dbId);
+        setSelectedLayoutId(dbId);
+        if (layoutRes?.layout) {
+          setSavedLayouts(prev => ({ ...prev, [dbId]: layoutRes.layout }));
+        }
+      });
+      return;
+    }
+
+    if (!localId) return;
+
+    const template = getTemplates().find((item) => String(item.id) === String(localId));
     if (!template) return;
 
     const templateConfig = template.config || {};
@@ -371,66 +618,49 @@ export default function GeneratePage() {
     if (templateConfig.aiInstructions) setAiInstructions(templateConfig.aiInstructions);
   }, [params]);
 
-  // Read Template Prefill on mount
+  // Persist current config to localStorage
   useEffect(() => {
-    const prefillRaw = localStorage.getItem("qp_template_prefill");
-    const prefillSource = localStorage.getItem("qp_prefill_source");
-
-    if (prefillRaw && (prefillSource === "template_use" || prefillSource === "template_create")) {
-      try {
-        const prefill = JSON.parse(prefillRaw);
-
-        // Set all form state from prefill
-        setConfig({
-          examName: String(prefill.examName ?? prefill.title ?? ""),
-          subject: String(prefill.subject ?? ""),
-          grade: String(prefill.grade ?? ""),
-          examType: String(prefill.examType ?? ""),
-          difficulty: String(prefill.difficulty ?? "Medium"),
-          totalMarks: Number(prefill.totalMarks ?? 100),
-          language: String(prefill.language ?? "English")
-        });
-
-        setActivePreset(prefill.examType ?? "Midterm");
-
-        setAiInstructions(String(prefill.instructions ?? ""));
-
-        if (Array.isArray(prefill.sections) && prefill.sections.length > 0) {
-          setSections(prefill.sections.map((s, idx) => ({
-            id: s.id ?? idx + 1,
-            name: String(s.name ?? `Section ${String.fromCharCode(65 + idx)}`),
-            marks: Number(s.marks ?? 0),
-            questionTypes: idx === 0 ? ["MCQ"] : ["Short Answer", "Long Answer"],
-            timeLimit: idx === 0 ? 30 : 60,
-            instructions: "Answer all questions in this section."
-          })));
-        }
-
-        // Show toast that template was loaded
-        showToast(`Template "${prefill.title}" loaded! Review and generate.`, "success");
-
-        // Clear prefill from localStorage after reading
-        localStorage.removeItem("qp_template_prefill");
-        localStorage.removeItem("qp_prefill_source");
-
-      } catch (err) {
-        console.error("Failed to parse template prefill:", err);
-        localStorage.removeItem("qp_template_prefill");
-        localStorage.removeItem("qp_prefill_source");
-      }
-    }
-  }, []);
-
-  // Persist current config to localStorage on change so that templates page can retrieve it
-  useEffect(() => {
-    const fullConfigState = {
-      ...config,
-      sections,
-      blooms,
-      aiInstructions,
-    };
-    localStorage.setItem("qp_current_config", JSON.stringify(fullConfigState));
+    localStorage.setItem("qp_current_config", JSON.stringify({ ...config, sections, blooms, aiInstructions }));
   }, [config, sections, blooms, aiInstructions]);
+
+  // Whenever a template is selected (from dropdown or on mount), fetch its saved config
+  useEffect(() => {
+    if (!selectedTemplateId) return;
+    // Skip if we already applied a prefill on this mount
+    if (initPrefill.prefill && initPrefill.tid === selectedTemplateId) return;
+
+    const applyConfig = (p) => {
+      setConfig(prev => ({
+        ...prev,
+        examName:       String(p.examName       || prev.examName       || ""),
+        subject:        String(p.subject        || prev.subject        || ""),
+        grade:          String(p.grade          || prev.grade          || ""),
+        difficulty:     String(p.difficulty     || prev.difficulty     || "Medium"),
+        totalMarks:     Number(p.totalMarks     || prev.totalMarks     || 100),
+        totalQuestions: Number(p.totalQuestions || prev.totalQuestions || 0),
+        language:       String(p.language       || prev.language       || "English"),
+      }));
+      if (p.notes)           setAiInstructions(p.notes);
+      if (p.selectedLayoutId) setSelectedLayoutId(p.selectedLayoutId);
+      if (p.activePreset)    setActivePreset(p.activePreset);
+      if (Array.isArray(p.sections) && p.sections.length > 0) setSections(p.sections);
+      setOpenPanels(prev => ({ ...prev, basic: true, sections: p.sections?.length > 0 }));
+    };
+
+    apiGetConfig(selectedTemplateId)
+      .then((res) => {
+        if (!res?.config) return;
+        applyConfig(res.config);
+        showToast("Progress restored — continue where you left off.", "success");
+        localStorage.setItem(`qp_cfg_${selectedTemplateId}`, JSON.stringify(res.config));
+      })
+      .catch(() => {
+        const cached = localStorage.getItem(`qp_cfg_${selectedTemplateId}`);
+        if (cached) {
+          try { applyConfig(JSON.parse(cached)); } catch { /* */ }
+        }
+      });
+  }, [selectedTemplateId]);
 
   const togglePanel = (panel) => {
     setOpenPanels((current) => ({ ...current, [panel]: !current[panel] }));
@@ -456,6 +686,9 @@ export default function GeneratePage() {
   };
 
   const validateForm = () => {
+    // When a real template is selected, backend fills subject/name — skip those checks
+    if (selectedTemplateId) return true;
+
     const errors = {};
     if (!config.examName.trim()) {
       errors.examName = "Exam Name is required.";
@@ -489,6 +722,29 @@ export default function GeneratePage() {
   };
 
   const openSaveModal = () => {
+    // If a template is selected, save directly to backend without modal
+    if (selectedTemplateId) {
+      const cfgToSave = {
+        examName: config.examName,
+        subject: config.subject,
+        grade: config.grade,
+        difficulty: config.difficulty,
+        totalMarks: config.totalMarks,
+        totalQuestions: config.totalQuestions,
+        duration: config.duration || "",
+        language: config.language,
+        notes: aiInstructions,
+        activePreset,
+        selectedLayoutId,
+        sections,
+      };
+      apiSaveConfig(selectedTemplateId, cfgToSave)
+        .then(() => showToast("Saved! Your progress is stored for this template.", "success"))
+        .catch(() => showToast("Save failed. Check connection.", "error"));
+      localStorage.setItem(`qp_cfg_${selectedTemplateId}`, JSON.stringify(cfgToSave));
+      return;
+    }
+    // No template selected — fall back to local save modal
     if (!validateForm()) return;
     setTemplateName(config.examName);
     setShowSaveModal(true);
@@ -552,19 +808,40 @@ export default function GeneratePage() {
     if (!validateForm()) return;
     setGenerationStep(0);
 
-    // Animate steps
-    for (let i = 1; i <= 4; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setGenerationStep(i);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
     try {
       let generatedPaper;
 
       if (selectedTemplateId) {
-        // ── Real AI generation via backend ──────────────────────────────
-        const result = await apiGenerate(selectedTemplateId, extraInstructions || undefined);
+        setGenerationStep(1);
+
+        // Fetch layout from backend directly (don't rely on savedLayouts state)
+        const layoutId = selectedLayoutId !== "default" ? selectedLayoutId : selectedTemplateId;
+        let fetchedLayout = null;
+        try {
+          const res = await apiGetLayout(layoutId);
+          if (res?.layout?.parts?.length) fetchedLayout = res.layout;
+        } catch { /* no layout saved */ }
+
+        // Build instructions from layout structure
+        let finalInstructions = extraInstructions || "";
+        if (fetchedLayout) {
+          const layoutInst = (fetchedLayout.parts || []).map(p =>
+            `${p.name}: ${p.questions?.length || 0} ${(p.questionType || "").replace("_", " ")} questions, ${p.marksPerQuestion} marks each.`
+          ).join(" ");
+          if (layoutInst) finalInstructions = `${layoutInst} ${finalInstructions}`.trim();
+        }
+
+        const animPromise = (async () => {
+          for (let i = 2; i <= 4; i++) {
+            await new Promise(r => setTimeout(r, 600));
+            setGenerationStep(i);
+          }
+        })();
+
+        const usedLayoutId = fetchedLayout ? (selectedLayoutId !== "default" ? selectedLayoutId : selectedTemplateId) : "default";
+        const result = await apiGenerate(selectedTemplateId, finalInstructions || undefined, usedLayoutId);
+        await animPromise;
+
         generatedPaper = {
           id: result.generation_id || Date.now().toString(),
           generation_id: result.generation_id,
@@ -581,9 +858,48 @@ export default function GeneratePage() {
           generatedAt: new Date().toISOString(),
           status: "Ready",
           source: "ai",
+          // track which layout was used so View can restore it correctly
+          usedLayoutId: fetchedLayout ? (selectedLayoutId !== "default" ? selectedLayoutId : selectedTemplateId) : "default",
         };
+
+        // Distribute questions into layout parts
+        if (fetchedLayout?.parts?.length && result.questions?.length > 0) {
+          const allQ = [...result.questions];
+          let qi = 0;
+          const filledParts = fetchedLayout.parts.map((part) => ({
+            ...part,
+            questions: part.questions.map((pq) => {
+              const gq = allQ[qi++];
+              if (!gq) return pq;
+              return {
+                ...pq,
+                primary: {
+                  ...pq.primary,
+                  text: gq.question_text || gq.question || gq.text || "",
+                  marks: gq.marks || pq.primary.marks,
+                },
+              };
+            }),
+          }));
+          generatedPaper.layout = {
+            ...fetchedLayout,
+            parts: filledParts,
+            header: {
+              ...fetchedLayout.header,
+              examTitle: generatedPaper.examName,
+              subject: generatedPaper.subject,
+              maxMarks: String(generatedPaper.totalMarks),
+            },
+          };
+        }
       } else {
         // ── Local mock fallback (no template selected) ──────────────────
+        for (let i = 1; i <= 4; i++) {
+          await new Promise(r => setTimeout(r, 500));
+          setGenerationStep(i);
+        }
+        await new Promise(r => setTimeout(r, 400));
+
         const mcqRow = matrix.find(r => r.type === "MCQ");
         const shortRow = matrix.find(r => r.type === "Short Answer");
         const longRow = matrix.find(r => r.type === "Long Answer");
@@ -609,13 +925,12 @@ export default function GeneratePage() {
         };
       }
 
-      // Save to history & localStorage for preview
+      // Save to localStorage for preview page
       const history = JSON.parse(localStorage.getItem("qp_history") || "[]");
       history.unshift(generatedPaper);
       localStorage.setItem("qp_history", JSON.stringify(history));
       localStorage.setItem("qp_current_paper", JSON.stringify(generatedPaper));
-      const count = Number(localStorage.getItem("qp_generated_count") || 0);
-      localStorage.setItem("qp_generated_count", String(count + 1));
+      localStorage.setItem("qp_generated_count", String(Number(localStorage.getItem("qp_generated_count") || 0) + 1));
 
       setGenerationStep(-1);
       showToast("Paper generated successfully!", "success");
@@ -666,7 +981,13 @@ export default function GeneratePage() {
     return "bg-[#EFF6FF] text-[#2563EB]";
   };
 
-  const stepsText = [
+  const stepsText = selectedTemplateId ? [
+    "🔗 Connecting to template...",
+    "📚 Loading syllabus & PYQs...",
+    "🤖 Gemini AI generating questions...",
+    "📝 Formatting paper...",
+    "✅ Paper ready!",
+  ] : [
     "📂 Reading source materials...",
     "🧠 Analyzing topics...",
     "⚙️ Applying Bloom's taxonomy...",
@@ -725,7 +1046,7 @@ export default function GeneratePage() {
                 <p className="text-xs text-[#374151] mb-3">Select a processed template to generate with real AI. Leave blank to use local mock generation.</p>
                 <select
                   value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  onChange={(e) => { setSelectedTemplateId(e.target.value); setSelectedLayoutId("default"); setConfig(defaultConfig); setAiInstructions(""); }}
                   className="h-[38px] w-full appearance-none rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#2563EB]"
                 >
                   <option value="">— Use local mock (no template) —</option>
@@ -774,6 +1095,117 @@ export default function GeneratePage() {
 
           {/* Form Accordions */}
           <div className="flex flex-col gap-4 px-6 pb-20">
+            {/* Layout Picker */}
+            <AccordionItem
+              title="Choose Layout"
+              isOpen={openPanels.layout}
+              onToggle={() => togglePanel("layout")}
+            >
+              <div className="space-y-3">
+                {/* Default layout option */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedLayoutId("default")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition text-left ${
+                    selectedLayoutId === "default"
+                      ? "border-[#2563EB] bg-[#EFF6FF]"
+                      : "border-[#E2E8F0] bg-white hover:border-[#93C5FD]"
+                  }`}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-[#F1F5F9] flex items-center justify-center shrink-0 text-base">🗂️</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[#111827]">Default Layout</div>
+                    <div className="text-xs text-[#9CA3AF] mt-0.5">Basic Configuration + Section Builder + AI Instructions</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {selectedLayoutId === "default" && (
+                      <span className="text-xs font-bold text-[#2563EB]">✓ Active</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setShowDefaultPreview(true); }}
+                      className="text-xs text-[#6B7280] hover:text-[#2563EB] underline"
+                    >
+                      View
+                    </button>
+                  </div>
+                </button>
+
+                {/* Saved layouts per template */}
+                {loadingLayouts ? (
+                  <div className="flex items-center gap-2 py-3 px-3 text-xs text-[#9CA3AF]">
+                    <Loader2 size={13} className="animate-spin" /> Loading saved layouts…
+                  </div>
+                ) : !selectedTemplateId ? (
+                  <p className="text-xs text-[#9CA3AF] text-center py-2">Select a template first to see its saved layouts.</p>
+                ) : !savedLayouts[selectedTemplateId] ? (
+                  <p className="text-xs text-[#9CA3AF] text-center py-2">No layout saved for this template yet. Create one below.</p>
+                ) : (() => {
+                    const tid = selectedTemplateId;
+                    const t = backendTemplates.find(x => (x._id || x.id) === tid);
+                    const layout = savedLayouts[tid] || {};
+                    const partCount = layout.parts?.length || 0;
+                    const subject = layout.header?.subject || t?.name || "";
+                    const examTitle = layout.header?.examTitle || "";
+                    const layoutSummary = [subject, partCount ? `${partCount} part${partCount !== 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ");
+
+                    return (
+                      <button
+                        key={tid}
+                        type="button"
+                        onClick={() => setSelectedLayoutId(tid)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition text-left ${
+                          selectedLayoutId === tid
+                            ? "border-[#2563EB] bg-[#EFF6FF]"
+                            : "border-[#E2E8F0] bg-white hover:border-[#93C5FD]"
+                        }`}
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-[#F0FDF4] flex items-center justify-center shrink-0 text-base">📄</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-[#111827] truncate">{t?.name || "Template Layout"}</div>
+                          <div className="text-xs text-[#9CA3AF] mt-0.5 truncate">
+                            {examTitle && <span className="text-[#6B7280]">{examTitle} · </span>}
+                            {layoutSummary}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {selectedLayoutId === tid && (
+                            <span className="text-xs font-bold text-[#2563EB]">✓ Active</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/layout/${tid}`); }}
+                            className="text-xs text-[#6B7280] hover:text-[#2563EB] underline"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </button>
+                    );
+                  })()
+                }
+
+                {/* Create new layout */}
+                {selectedTemplateId ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/layout/${selectedTemplateId}`)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-[#D1D5DB] bg-white hover:border-[#2563EB] hover:bg-[#EFF6FF] transition text-left"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-[#F1F5F9] flex items-center justify-center shrink-0">
+                      <Plus size={16} className="text-[#6B7280]" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-[#374151]">Create New Layout</div>
+                      <div className="text-xs text-[#9CA3AF]">Design header, parts, and question structure</div>
+                    </div>
+                  </button>
+                ) : (
+                  <p className="text-xs text-[#9CA3AF] text-center py-1">Select a template above to create a custom layout for it.</p>
+                )}
+              </div>
+            </AccordionItem>
+
             {/* Basic Config */}
             <AccordionItem
               title="Basic Configuration"
@@ -1043,6 +1475,9 @@ export default function GeneratePage() {
           </div>
         </aside>
       </div>
+
+      {/* Default Layout Preview Modal */}
+      {showDefaultPreview && <DefaultLayoutPreviewModal onClose={() => setShowDefaultPreview(false)} config={config} sections={sections} examType={activePreset} />}
 
       {/* Save Template Modal */}
       {showSaveModal ? (

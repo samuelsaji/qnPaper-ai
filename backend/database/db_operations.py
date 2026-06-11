@@ -58,6 +58,42 @@ def save_template_result(template_id: str, results: List[dict]) -> str:
     result = db["template_results"].insert_one(result_dict)
     return str(result.inserted_id)
 
+
+def save_template_layout(template_id: str, layout: dict) -> None:
+    """Upsert layout for a template (one layout per template)."""
+    db["template_layouts"].update_one(
+        {"template_id": template_id},
+        {"$set": {"template_id": template_id, "layout": layout}},
+        upsert=True
+    )
+
+def get_template_layout(template_id: str) -> Optional[dict]:
+    """Return saved layout for a template, or None."""
+    doc = db["template_layouts"].find_one({"template_id": template_id})
+    if doc:
+        return doc.get("layout")
+    return None
+
+def save_template_config(template_id: str, config: dict) -> None:
+    """Save exam config details onto the template document."""
+    try:
+        template_collection.update_one(
+            {"_id": ObjectId(template_id)},
+            {"$set": {"config": config}}
+        )
+    except Exception as e:
+        print(f"Error saving template config: {e}")
+        raise
+
+def get_template_config(template_id: str) -> Optional[dict]:
+    """Return saved config for a template, or None."""
+    try:
+        doc = template_collection.find_one({"_id": ObjectId(template_id)}, {"config": 1})
+        return doc.get("config") if doc else None
+    except Exception as e:
+        print(f"Error getting template config: {e}")
+        return None
+
 def get_template_results(template_id: str) -> Optional[dict]:
     try:
         print(f"Searching for template_id: '{template_id}' (type: {type(template_id)})")

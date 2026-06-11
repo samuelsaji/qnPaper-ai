@@ -64,12 +64,13 @@ export const apiGetQPResults = (templateId) =>
 
 // ── Generate ──────────────────────────────────────────────────────────────────
 
-export const apiGenerate = (templateId, customInstructions) =>
+export const apiGenerate = (templateId, customInstructions, layoutId) =>
   request("/api/generate", {
     method: "POST",
     body: JSON.stringify({
       template_id: templateId,
       custom_instructions: customInstructions || undefined,
+      layout_id: layoutId || "default",
     }),
   });
 
@@ -78,3 +79,25 @@ export const apiGetGeneratedPapers = (templateId) =>
 
 export const apiGetGeneratedPaper = (generationId) =>
   request(`/generated/paper/${generationId}`);
+
+// ── Template Layout ───────────────────────────────────────────────────────────
+
+export const apiSaveLayout = (templateId, layout) =>
+  request(`/api/template-layout/${templateId}`, {
+    method: "POST",
+    body: JSON.stringify({ layout }),
+  });
+
+export const apiGetLayout = (templateId) =>
+  request(`/api/template-layout/${templateId}`);
+
+// ── Template Config ───────────────────────────────────────────────────────────
+
+export const apiSaveConfig = (templateId, config) =>
+  request(`/api/template-config/${templateId}`, {
+    method: "POST",
+    body: JSON.stringify({ config }),
+  });
+
+export const apiGetConfig = (templateId) =>
+  request(`/api/template-config/${templateId}`);

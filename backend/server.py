@@ -6,7 +6,9 @@ from pydantic import BaseModel
 import jwt
 from datetime import datetime, timedelta
 from database.db_operations import (
-    create_user, get_user_by_email, create_template, get_templates_by_user
+    create_user, get_user_by_email, create_template, get_templates_by_user,
+    save_template_layout, get_template_layout,
+    save_template_config, get_template_config
 )
 from database.db_schema import UserCreate, UserLogin
 from dotenv import load_dotenv
@@ -276,6 +278,7 @@ async def get_qp_results(template_id: str, current_user: str = Depends(verify_to
 class GenerateRequest(BaseModel):
     template_id: str
     custom_instructions: Optional[str] = None
+    layout_id: Optional[str] = None  # track which layout was used
 
     class Config:
         json_schema_extra = {
@@ -336,7 +339,7 @@ def generate(request: GenerateRequest):
     try:
         generation_id = save_generated_questions(
             template_id=request.template_id,
-            result=result,
+            result={**result, "layout_id": request.layout_id or "default"},
         )
         logger.info(f"Saved — {result['question_count']} questions, id={generation_id}")
     except Exception as e:
@@ -346,6 +349,7 @@ def generate(request: GenerateRequest):
     return {
         "generation_id": generation_id,
         "template_id": request.template_id,
+        "layout_id": request.layout_id or "default",
         **result,
     }
 
@@ -383,6 +387,53 @@ def get_one_generated(generation_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ── Template Layout ───────────────────────────────────────────────────────────
+
+class LayoutSaveRequest(BaseModel):
+    layout: dict
+
+@app.post("/api/template-layout/{template_id}")
+async def save_layout(template_id: str, body: LayoutSaveRequest, current_user: str = Depends(verify_token)):
+    """Save (upsert) a question paper layout for a template."""
+    try:
+        save_template_layout(template_id, body.layout)
+        return {"message": "Layout saved", "template_id": template_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/template-layout/{template_id}")
+async def get_layout(template_id: str, current_user: str = Depends(verify_token)):
+    """Get saved layout for a template."""
+    layout = get_template_layout(template_id)
+    if layout is None:
+        raise HTTPException(status_code=404, detail="No layout saved for this template")
+    return {"template_id": template_id, "layout": layout}
+
+
+# ── Template Config ───────────────────────────────────────────────────────────
+
+class ConfigSaveRequest(BaseModel):
+    config: dict
+
+@app.post("/api/template-config/{template_id}")
+async def save_config(template_id: str, body: ConfigSaveRequest, current_user: str = Depends(verify_token)):
+    """Save exam config details for a template."""
+    try:
+        save_template_config(template_id, body.config)
+        return {"message": "Config saved", "template_id": template_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/template-config/{template_id}")
+async def get_config(template_id: str, current_user: str = Depends(verify_token)):
+    """Get saved config for a template."""
+    config = get_template_config(template_id)
+    if config is None:
+        raise HTTPException(status_code=404, detail="No config saved for this template")
+    return {"template_id": template_id, "config": config}
 
 
 if __name__ == "__main__":

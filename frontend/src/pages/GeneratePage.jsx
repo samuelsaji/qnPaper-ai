@@ -402,10 +402,9 @@ export default function GeneratePage() {
     if (p && Array.isArray(p.sections) && p.sections.length > 0) return p.sections;
     return defaultSections;
   });
-  const [aiInstructions, setAiInstructions] = useState(() => {
-    const p = initPrefill.prefill;
-    return p?.notes || p?.aiInstructions || "Generate Questions Based on the Syllabus and PYQ's that Given For this template";
-  });
+  const [aiInstructions, setAiInstructions] = useState(
+    initPrefill.prefill?.notes || initPrefill.prefill?.aiInstructions || "Generate Questions Based on the Given Syllabus and PYQ Questions"
+  );
   const { sharedFiles, setSharedFiles, currentUser } = useContext(AuthContext);
 
   // Backend templates for the selector
@@ -629,6 +628,8 @@ export default function GeneratePage() {
     // Skip if we already applied a prefill on this mount
     if (initPrefill.prefill && initPrefill.tid === selectedTemplateId) return;
 
+    const DEFAULT_PROMPT = "Generate Questions Based on the Given Syllabus and PYQ Questions";
+
     const applyConfig = (p) => {
       setConfig(prev => ({
         ...prev,
@@ -640,7 +641,7 @@ export default function GeneratePage() {
         totalQuestions: Number(p.totalQuestions || prev.totalQuestions || 0),
         language:       String(p.language       || prev.language       || "English"),
       }));
-      if (p.notes)           setAiInstructions(p.notes);
+      setAiInstructions(p.notes || DEFAULT_PROMPT);
       if (p.selectedLayoutId) setSelectedLayoutId(p.selectedLayoutId);
       if (p.activePreset)    setActivePreset(p.activePreset);
       if (Array.isArray(p.sections) && p.sections.length > 0) setSections(p.sections);
@@ -1046,7 +1047,7 @@ export default function GeneratePage() {
                 <p className="text-xs text-[#374151] mb-3">Select a processed template to generate with real AI. Leave blank to use local mock generation.</p>
                 <select
                   value={selectedTemplateId}
-                  onChange={(e) => { setSelectedTemplateId(e.target.value); setSelectedLayoutId("default"); setConfig(defaultConfig); setAiInstructions(""); }}
+                  onChange={(e) => { setSelectedTemplateId(e.target.value); setSelectedLayoutId("default"); setConfig(defaultConfig); setAiInstructions("Generate Questions Based on the Given Syllabus and PYQ Questions"); }}
                   className="h-[38px] w-full appearance-none rounded-lg border border-[#D1D5DB] bg-white px-3 text-sm outline-none focus:border-[#2563EB]"
                 >
                   <option value="">— Use local mock (no template) —</option>
